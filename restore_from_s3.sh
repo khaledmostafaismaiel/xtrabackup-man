@@ -1,20 +1,13 @@
 #!/bin/bash
 set -e
 
-#############################################
-# Load environment
-#############################################
 source /opt/xtrabackup-man/load_env.sh
-
-LOG_DIR="/opt/xtrabackup-man/logs"
-mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/restore.log"
 
 #############################################
 # Parse arguments
 #############################################
 usage() {
-    echo "Usage: $0 --date <YYYY-MM-DD> --time <HH:MM:SS> --restore-dir </path/to/restore>"
+    echo "Usage: $0 --date <YYYY-MM-DD> --time <HH:MM:SS> --restore-dir </path>"
     exit 1
 }
 
@@ -23,7 +16,7 @@ while [[ "$#" -gt 0 ]]; do
         --date) RESTORE_DATE="$2"; shift ;;
         --time) RESTORE_TIME="$2"; shift ;;
         --restore-dir) RESTORE_DIR="$2"; shift ;;
-        *) echo "Unknown parameter passed: $1"; usage ;;
+        *) echo "Unknown parameter: $1"; usage ;;
     esac
     shift
 done
@@ -32,113 +25,119 @@ if [[ -z "$RESTORE_DATE" || -z "$RESTORE_TIME" || -z "$RESTORE_DIR" ]]; then
     usage
 fi
 
-#############################################
-# Start logging
-#############################################
-echo "===============================================" | tee -a "$LOG_FILE"
-echo "  RESTORE STARTED" | tee -a "$LOG_FILE"
-echo "===============================================" | tee -a "$LOG_FILE"
-echo "Restore date: $RESTORE_DATE" | tee -a "$LOG_FILE"
-echo "Restore time: $RESTORE_TIME" | tee -a "$LOG_FILE"
-echo "Local restore directory: $RESTORE_DIR" | tee -a "$LOG_FILE"
-echo "S3 bucket: $AWS_S3_BUCKET" | tee -a "$LOG_FILE"
-echo "" | tee -a "$LOG_FILE"
+TARGET_DB="${TARGET_DATABASE:-}"
 
-#############################################
-# Sanity checks
-#############################################
+echo "==============================================="
+echo "        RESTORE PROCESS STARTED"
+echo "==============================================="
+echo "Date        : $RESTORE_DATE"
+echo "Time        : $RESTORE_TIME"
+echo "Restore dir : $RESTORE_DIR"
+echo "Target DB   : ${TARGET_DB:-ALL DATABASES}"
+echo "==============================================="
+
 if [[ -d "$RESTORE_DIR" ]]; then
-    echo "❌ ERROR: Restore directory already exists. Choose a new one." | tee -a "$LOG_FILE"
+    echo "❌ ERROR: Restore directory already exists."
     exit 1
 fi
 
 mkdir -p "$RESTORE_DIR/binlogs"
 mkdir -p "$RESTORE_DIR/full"
+
+#############################################
+# Step 1: Download full backup
+#############################################
+echo "➡ Downloading full backup..."
+
+aws s3 sync "s3://$AWS_S3_BUCKET/full/$RESTORE_DATE" \
+    "$RESTORE_DIR/full" --region "$AWS_REGION"
+
+echo "✔ Full backup downloaded"
+
+
+#############################################
+# Step 2: Prepare backup
+#############################################
+echo "➡ Preparing backup with xtrabackup..."
+xtrabackup --prepare --target-dir="$RESTORE_DIR/full"
+echo "✔ Prepared"
+
+
+#############################################
+# Step 3: Restore into datadir
+#############################################
+echo "➡ Restoring datadir..."
+
 mkdir -p "$RESTORE_DIR/data"
 
-#############################################
-# Step 1: Download full backup from S3
-#############################################
-echo "➡ Downloading full backup from S3..." | tee -a "$LOG_FILE"
+xtrabackup --copy-back --target-dir="$RESTORE_DIR/full" \
+    --datadir="$RESTORE_DIR/data"
 
-S3_FULL_PATH="s3://$AWS_S3_BUCKET/full/$RESTORE_DATE"
-aws s3 sync "$S3_FULL_PATH" "$RESTORE_DIR/full" --region "$AWS_REGION" | tee -a "$LOG_FILE"
+chown -R mysql:mysql "$RESTORE_DIR/data"
+echo "✔ Datadir restored"
 
-if [[ ! -d "$RESTORE_DIR/full" ]]; then
-    echo "❌ ERROR: No full backup found at $S3_FULL_PATH" | tee -a "$LOG_FILE"
-    exit 1
+
+#############################################
+# Step 4: Optional pruning (single-database restore)
+#############################################
+if [[ -n "$TARGET_DB" ]]; then
+    echo "➡ Single database mode: Keeping only '$TARGET_DB'"
+
+    cd "$RESTORE_DIR/data"
+
+    for db in */ ; do
+        db="${db%/}"
+        case "$db" in
+            "$TARGET_DB"|"mysql"|"performance_schema"|"sys")
+                echo "   Keeping $db"
+                ;;
+            *)
+                echo "   Removing $db"
+                rm -rf "$db"
+                ;;
+        esac
+    done
+
+    echo "✔ Unwanted databases removed"
 fi
 
-echo "✔ Full backup downloaded" | tee -a "$LOG_FILE"
 
 #############################################
-# Step 2: Prepare the XtraBackup full backup
+# Step 5: Download binlogs
 #############################################
-echo "➡ Preparing full backup with xtrabackup..." | tee -a "$LOG_FILE"
-xtrabackup --prepare --target-dir="$RESTORE_DIR/full" | tee -a "$LOG_FILE"
-echo "✔ Full backup prepared" | tee -a "$LOG_FILE"
+echo "➡ Downloading binlogs..."
+
+aws s3 sync "s3://$AWS_S3_BUCKET/binlogs/" \
+    "$RESTORE_DIR/binlogs" --region "$AWS_REGION"
+
+echo "✔ Binlogs downloaded"
+
 
 #############################################
-# Step 3: Restore full backup to restore directory
+# Step 6: Apply binlogs
 #############################################
-echo "➡ Restoring MySQL data directory to $RESTORE_DIR/data" | tee -a "$LOG_FILE"
-xtrabackup --copy-back --target-dir="$RESTORE_DIR/full" --datadir="$RESTORE_DIR/data" | tee -a "$LOG_FILE"
-echo "✔ Full backup restored" | tee -a "$LOG_FILE"
-
-#############################################
-# Step 4: Fix file permissions
-#############################################
-echo "➡ Fixing data directory permissions..." | tee -a "$LOG_FILE"
-chown -R mysql:mysql "$RESTORE_DIR/data"
-echo "✔ Permissions fixed" | tee -a "$LOG_FILE"
-
-#############################################
-# Step 5: Download binlogs from S3
-#############################################
-echo "➡ Downloading binlogs from S3..." | tee -a "$LOG_FILE"
-aws s3 sync "s3://$AWS_S3_BUCKET/binlogs/" "$RESTORE_DIR/binlogs" --region "$AWS_REGION" | tee -a "$LOG_FILE"
-echo "✔ Binlogs downloaded" | tee -a "$LOG_FILE"
-
-#############################################
-# Step 6: Replay binlogs up to the given timestamp
-#############################################
-echo "➡ Applying binlogs up to $RESTORE_DATE $RESTORE_TIME ..." | tee -a "$LOG_FILE"
+echo "➡ Applying binlogs up to $RESTORE_TIME ..."
 
 for binlog in $(ls "$RESTORE_DIR/binlogs" | sort); do
-    if [[ $binlog == mysql-bin.* ]]; then
-        FILE_PATH="$RESTORE_DIR/binlogs/$binlog"
-        echo "  - Applying $binlog" | tee -a "$LOG_FILE"
-        mysqlbinlog --stop-datetime="$RESTORE_DATE $RESTORE_TIME" "$FILE_PATH" | \
-            mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -h "$MYSQL_HOST" | tee -a "$LOG_FILE"
+    file="$RESTORE_DIR/binlogs/$binlog"
+
+    if [[ -n "$TARGET_DB" ]]; then
+        mysqlbinlog --stop-datetime="$RESTORE_DATE $RESTORE_TIME" \
+            --database="$TARGET_DB" "$file" | mysql
+    else
+        mysqlbinlog --stop-datetime="$RESTORE_DATE $RESTORE_TIME" \
+            "$file" | mysql
     fi
 done
 
-echo "✔ Binlogs applied successfully" | tee -a "$LOG_FILE"
+echo "✔ Binlogs applied"
+
 
 #############################################
-# Step 7: Rotate restore logs
+# DONE
 #############################################
-# Compress logs older than 1 day
-find "$LOG_DIR" -type f -name "*.log" -mtime +1 -exec gzip -f {} \;
-# Delete compressed logs older than RETENTION_DAYS
-find "$LOG_DIR" -type f -name "*.log.gz" -mtime +"$RETENTION_DAYS" -delete
-# Ensure current log exists
-touch "$LOG_FILE"
-
-#############################################
-# Done
-#############################################
-echo "===============================================" | tee -a "$LOG_FILE"
-echo "  RESTORE COMPLETED SUCCESSFULLY" | tee -a "$LOG_FILE"
-echo "===============================================" | tee -a "$LOG_FILE"
-echo "Restored DB path: $RESTORE_DIR/data" | tee -a "$LOG_FILE"
-echo "To start MySQL with this data directory:" | tee -a "$LOG_FILE"
-echo "mysqld --datadir=$RESTORE_DIR/data --port=3307 --socket=/tmp/mysql-restore.sock" | tee -a "$LOG_FILE"
-
-#############################################
-# How To Use
-#############################################
-# /opt/xtrabackup-man/restore_from_s3.sh \
-#   --date 2025-01-14 \
-#   --time 15:30:00 \
-#   --restore-dir /restore/test-restore
+echo ""
+echo "==============================================="
+echo "   RESTORE COMPLETED SUCCESSFULLY"
+echo "   Data restored into: $RESTORE_DIR/data"
+echo "==============================================="
