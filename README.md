@@ -93,10 +93,18 @@ aws configure
 #### Ubuntu/Debian
 
 ```bash
+# Download and install the percona-release repository package
 wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
 sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+
+# Enable the repository for Percona XtraBackup 8.0
+sudo percona-release enable-only tools release
 sudo apt update
+
+# Install Percona XtraBackup 8.0
 sudo apt install -y percona-xtrabackup-80
+
+# Verify installation
 xtrabackup --version
 ```
 
