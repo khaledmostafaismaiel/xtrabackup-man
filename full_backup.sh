@@ -1,43 +1,67 @@
 #!/bin/bash
 set -e
 
+#############################################
+# Load environment
+#############################################
 source /opt/xtrabackup-man/load_env.sh
 
+#############################################
+# Start logging
+#############################################
 LOG_DIR="/opt/xtrabackup-man/logs"
 mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/full_backup.log"
+LOG_FILE="$LOG_DIR/backup_full.log"
 
-echo "[$(date)] Starting full backup..." | tee -a "$LOG_FILE"
+echo "===============================================" | tee -a "$LOG_FILE"
+echo "  FULL BACKUP STARTED" | tee -a "$LOG_FILE"
+echo "===============================================" | tee -a "$LOG_FILE"
+echo "Date: $(date)" | tee -a "$LOG_FILE"
+echo "Target Database: ${DB_NAME:-ALL DATABASES}" | tee -a "$LOG_FILE"
+echo "S3 Bucket: $AWS_S3_BUCKET" | tee -a "$LOG_FILE"
+echo "===============================================" | tee -a "$LOG_FILE"
 
-DATE=$(date +%F)
-DEST="$FULL_BACKUP_DIR/$DATE"
+#############################################
+# Prepare backup directory
+#############################################
+TODAY=$(date +%F)
+BACKUP_DIR="$FULL_BACKUP_DIR/$TODAY"
 
-# Flush logs to start new binlog file
-mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -h "$MYSQL_HOST" -e "FLUSH LOGS;"
+mkdir -p "$BACKUP_DIR"
 
-# Create backup
-xtrabackup --backup \
-    --target-dir="$DEST" \
-    --user="$MYSQL_USER" \
-    --password="$MYSQL_PASS" \
-    --host="$MYSQL_HOST" \
-    --parallel=4 \
-    --compress \
-    --compress-threads=4 | tee -a "$LOG_FILE"
+#############################################
+# Step 1: Run XtraBackup
+#############################################
+echo "➡ Running XtraBackup..." | tee -a "$LOG_FILE"
 
-# Prepare backup
-xtrabackup --prepare --target-dir="$DEST" | tee -a "$LOG_FILE"
+if [[ -n "$DB_NAME" ]]; then
+    # Backup only a single database by including/excluding tables
+    # XtraBackup does not support single database natively, workaround: backup full and remove unwanted dirs later
+    xtrabackup --backup --target-dir="$BACKUP_DIR" | tee -a "$LOG_FILE"
+    echo "✔ Full instance backup done. Will prune unwanted databases during restore."
+else
+    # Full instance backup
+    xtrabackup --backup --target-dir="$BACKUP_DIR" | tee -a "$LOG_FILE"
+fi
 
-# Upload to S3
-aws s3 sync "$DEST" "s3://$AWS_S3_BUCKET/full/$DATE/" --region "$AWS_REGION" | tee -a "$LOG_FILE"
+#############################################
+# Step 2: Flush logs (optional)
+#############################################
+echo "➡ Flushing MySQL binary logs..." | tee -a "$LOG_FILE"
+mysql -u "$DB_USER" -p"$DB_PASSWORD" -h "$DB_HOST" -e "FLUSH LOGS;" | tee -a "$LOG_FILE"
 
-# Rotate logs older than 1 day
-find "$LOG_DIR" -type f -name "*.log" -mtime +1 -exec gzip -f {} \;
+#############################################
+# Step 3: Upload to S3
+#############################################
+echo "➡ Uploading backup to S3..." | tee -a "$LOG_FILE"
 
-# Delete compressed logs older than RETENTION_DAYS
-find "$LOG_DIR" -type f -name "*.log.gz" -mtime +"$RETENTION_DAYS" -delete
+aws s3 sync "$BACKUP_DIR" "s3://$AWS_S3_BUCKET/full/$TODAY" --region "$AWS_REGION" | tee -a "$LOG_FILE"
 
-# Ensure log file exists for next run
-touch "$LOG_FILE"
+echo "✔ Backup uploaded to S3" | tee -a "$LOG_FILE"
 
-echo "[$(date)] Full backup completed" | tee -a "$LOG_FILE"
+#############################################
+# Step 4: Finish
+#############################################
+echo "===============================================" | tee -a "$LOG_FILE"
+echo "  FULL BACKUP COMPLETED" | tee -a "$LOG_FILE"
+echo "===============================================" | tee -a "$LOG_FILE"
