@@ -4,12 +4,12 @@ set -e
 #############################################
 # Load environment
 #############################################
-source /opt/xtrabackup-man/load_env.sh
+source ~/xtrabackup-man/load_env.sh
 
 #############################################
 # Start logging
 #############################################
-LOG_DIR="/opt/xtrabackup-man/logs"
+LOG_DIR="~/xtrabackup-man/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/backup_full.log"
 

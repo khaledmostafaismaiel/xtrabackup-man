@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-source /opt/xtrabackup-man/load_env.sh
+source ~/xtrabackup-man/load_env.sh
 
 #############################################
 # Parse arguments

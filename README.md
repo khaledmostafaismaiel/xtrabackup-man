@@ -58,9 +58,9 @@ cp .env.example .env
 nano .env  # Edit with your settings
 
 # 3. Set permissions
-chmod 700 /opt/xtrabackup-man/*.sh
-chmod 600 /opt/xtrabackup-man/.env
-chmod 700 /opt/xtrabackup-man/logs
+chmod 700 ~/xtrabackup-man/*.sh
+chmod 600 ~/xtrabackup-man/.env
+chmod 700 ~/xtrabackup-man/logs
 chown -R mysql:mysql /backups   # if necessary for MySQL
 
 # 4. Setup cron jobs
@@ -239,13 +239,13 @@ Add the following entries (adjust paths as needed):
 
 ```cron
 # Full backup daily at 2 AM
-0 2 * * * /opt/xtrabackup-man/full_backup.sh >> /opt/xtrabackup-man/logs/full_backup.log 2>&1
+0 2 * * * ~/xtrabackup-man/full_backup.sh >> ~/xtrabackup-man/logs/full_backup.log 2>&1
 
 # Binlog archive every 30 minutes
-*/30 * * * * /opt/xtrabackup-man/archive_binlogs.sh >> /opt/xtrabackup-man/logs/archive_binlogs.log 2>&1
+*/30 * * * * ~/xtrabackup-man/archive_binlogs.sh >> ~/xtrabackup-man/logs/archive_binlogs.log 2>&1
 
 # Cleanup daily at 3 AM
-0 3 * * * /opt/xtrabackup-man/cleanup.sh >> /opt/xtrabackup-man/logs/cleanup.log 2>&1
+0 3 * * * ~/xtrabackup-man/cleanup.sh >> ~/xtrabackup-man/logs/cleanup.log 2>&1
 ```
 
 ## 🔄 Restore Procedures
@@ -304,14 +304,14 @@ If the test restore looks correct:
 
 ```bash
 # Secure the backup directory
-chmod 700 /opt/db-backups
-chmod 600 /opt/db-backups/.env
+chmod 700 ~/db-backups
+chmod 600 ~/db-backups/.env
 
 # Make scripts executable
-chmod 700 /opt/db-backups/*.sh
+chmod 700 ~/db-backups/*.sh
 
 # Set ownership
-chown -R root:root /opt/db-backups
+chown -R root:root ~/db-backups
 ```
 
 ### MySQL User Privileges
@@ -429,8 +429,8 @@ Add:
 
 ```bash
 # Check file permissions
-ls -la /opt/db-backups/
-chmod 700 /opt/db-backups/*.sh
+ls -la ~/db-backups/
+chmod 700 ~/db-backups/*.sh
 ```
 
 #### S3 Upload Fails
