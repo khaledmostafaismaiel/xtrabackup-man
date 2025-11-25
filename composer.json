@@ -1,0 +1,46 @@
+{
+    "name": "khaledmostafaismaiel/xtrabackup-man",
+    "description": "MySQL backup and restore manager using Percona XtraBackup with S3 integration",
+    "keywords": ["mysql", "backup", "xtrabackup", "s3", "laravel-zero", "cli"],
+    "homepage": "https://github.com/khaledmostafaismaiel/xtrabackup-man",
+    "type": "project",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Khaled Mostafa",
+            "email": "your-email@example.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "laravel-zero/framework": "^12.0.2"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.25.1",
+        "mockery/mockery": "^1.6.12",
+        "pestphp/pest": "^3.8.4|^4.1.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "optimize-autoloader": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "bin": ["application"]
+}

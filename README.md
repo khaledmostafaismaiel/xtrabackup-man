@@ -4,17 +4,17 @@
 ![Percona XtraBackup](https://img.shields.io/badge/XtraBackup-8.x-orange)
 ![AWS S3](https://img.shields.io/badge/AWS-S3-yellow?logo=amazon-aws)
 
-A **robust, enterprise-grade backup and restore solution** for large-scale MySQL databases with point-in-time recovery capabilities.
+**Originally built with a collection of Bash shell scripts, this project has been refactored into a Laravel Zero application**, providing the same robust, enterprise‑grade backup and restore capabilities with a more maintainable, extensible codebase.
 
 ## ✨ Features
 
-- 🔄 **Automated Full Backups** - Daily full backups using Percona XtraBackup
-- 📝 **Binary Log Archiving** - Continuous binlog archiving every 30 minutes for PITR
-- ☁️ **S3 Integration** - Automatic upload to AWS S3 for offsite storage
-- ⏱️ **Point-in-Time Recovery** - Restore to any specific timestamp
-- 🧹 **Automatic Cleanup** - Configurable retention policies for local and S3 backups
-- 🔒 **Secure Configuration** - Environment-based configuration with no hardcoded credentials
-- 📊 **Comprehensive Logging** - Detailed logging for monitoring and troubleshooting
+- 🔄 Automated Full Backups – Daily full backups using Percona XtraBackup
+- 📝 Binary Log Archiving – Continuous binlog archiving every 30 minutes for PITR
+- ☁️ S3 Integration – Automatic upload to AWS S3 for off‑site storage
+- ⏱️ Point‑in‑Time Recovery – Restore to any specific timestamp
+- 🧹 Automatic Cleanup – Configurable retention policies for local and S3 backups
+- 🔒 Secure Configuration – Environment‑based configuration with no hard‑coded credentials
+- 📊 Comprehensive Logging – Detailed logging for monitoring and troubleshooting
 
 ---
 
@@ -25,52 +25,50 @@ A **robust, enterprise-grade backup and restore solution** for large-scale MySQL
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Project Structure](#project-structure)
-- [Scripts Reference](#scripts-reference)
+- [Usage (Laravel Commands)](#usage-laravel-commands)
 - [Scheduling with Cron](#scheduling-with-cron)
-- [Restore Procedures](#restore-procedures)
 - [Security & Permissions](#security--permissions)
 - [Logging](#logging)
 - [Best Practices](#best-practices)
 - [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
 
 ---
 
 ## 🔧 Requirements
 
 - **MySQL/MariaDB** 8.x (InnoDB storage engine recommended)
-- **Operating System:** Linux (Ubuntu/Debian)
+- **Linux** (Ubuntu/Debian) – other distros may work with minor adjustments
 - **Percona XtraBackup** 8.x
 - **AWS CLI** configured with S3 access
-- **Bash** shell >= 4.x
-- **Disk Space:** Sufficient space for backups and binary logs
+- **PHP 8.2+** and **Composer**
 
 ---
 
 ## 🚀 Quick Start
 
 ```bash
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/khaledmostafaismaiel/xtrabackup-man.git
 cd xtrabackup-man
 
-# 2. Configure environment
+# Install PHP dependencies (Laravel Zero)
+composer install --no-dev --optimize-autoloader
+
+# Copy environment file and edit settings
 cp .env.example .env
-nano .env  # Edit with your settings
+nano .env   # set DB credentials, S3 bucket, retention, etc.
 
-# 3. Set permissions
-chmod 700 ~/xtrabackup-man/*.sh
-chmod 600 ~/xtrabackup-man/.env
-chmod 700 ~/xtrabackup-man/logs
-chown -R mysql:mysql /backups   # if necessary for MySQL
-
-# 4. Setup cron jobs
-crontab -e  # Add jobs from crontab.example
+# Ensure storage directories exist and are writable
+chmod -R 700 storage/logs
+chmod -R 700 storage/backups
 ```
+
+---
+
 ## 📦 Installation
 
 ### 1. AWS CLI Installation
-
-#### Ubuntu/Debian
 
 ```bash
 sudo apt update
@@ -78,33 +76,20 @@ sudo apt install -y awscli
 aws --version
 ```
 
-Configure AWS credentials:
+Configure credentials:
 
 ```bash
 aws configure
-# Enter your AWS Access Key ID
-# Enter your AWS Secret Access Key
-# Default region: us-east-1 (or your preferred region)
-# Default output format: json
 ```
 
 ### 2. Percona XtraBackup Installation
 
-#### Ubuntu/Debian
-
 ```bash
-# Download and install the percona-release repository package
 wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
 sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-
-# Enable the repository for Percona XtraBackup 8.0
 sudo percona-release enable-only tools release
 sudo apt update
-
-# Install Percona XtraBackup 8.0
 sudo apt install -y percona-xtrabackup-80
-
-# Verify installation
 xtrabackup --version
 ```
 
@@ -112,282 +97,98 @@ xtrabackup --version
 
 ## ⚙️ Configuration
 
-Copy the example environment file and configure it:
+Copy the example environment file and adjust values:
 
 ```bash
 cp .env.example .env
+nano .env
 ```
-
-Edit `.env` with your settings:
-
-> **Note:** Ensure the MySQL user has appropriate privileges (see [Security & Permissions](#security--permissions))
 
 ---
 
 ## 📁 Project Structure
 
-```
+```text
 xtrabackup-man/
-├── full_backup.sh           # Daily full backup script
-├── archive_binlogs.sh       # Binary log archiving script
-├── cleanup.sh               # Cleanup old backups
-├── restore_from_s3.sh       # Point-in-time restore script
-├── load_env.sh              # Environment loader helper
-├── .env                     # Configuration file (create from .env.example)
-├── .env.example             # Example configuration
-├── crontab.example          # Example cron schedule
-├── logs/                    # Log directory
-└── README.md                # This file
+├── app/
+│   └── Commands/                # Laravel Zero commands
+│       ├── FullBackupCommand.php
+│       ├── BinlogArchiveCommand.php
+│       ├── CleanupCommand.php
+│       └── RestoreCommand.php
+├── config/                       # Configuration files (if any)
+├── storage/
+│   ├── logs/                     # Application logs
+│   └── backups/                  # Local backup storage (git‑ignored)
+│       ├── full/                # Full backups by date
+│       └── binlogs/             # Binary log archives
+├── .env.example
+├── composer.json
+├── README.md
+└── vendor/                      # Composer dependencies
 ```
 
 ---
 
-## 📜 Scripts Reference
+## 📜 Usage (Laravel Commands)
 
-### `full_backup.sh`
+All backup operations are now Laravel Zero commands executed via `php artisan` (or the provided binary `application`). Use `sudo -E` when the MySQL user or S3 credentials require elevated permissions.
 
-Performs a complete backup of the MySQL database using XtraBackup.
+| Command | Description |
+|---------|-------------|
+| `php application backup:full` | Perform a full XtraBackup, prepare it, and upload to S3. |
+| `php application backup:binlogs` | Archive current binary logs and upload to S3. |
+| `php application backup:cleanup` | Remove old local and S3 backups according to `RETENTION_DAYS_FOR_LOCAL` and `RETENTION_DAYS_FOR_CLOUD`. |
+| `php application backup:restore --date=YYYY-MM-DD --time=HH:MM:SS` | Restore a specific backup and apply binary logs up to the given timestamp. 
 
-**Features:**
-- Creates a full backup using `xtrabackup --backup`
-- Prepares the backup for restore with `xtrabackup --prepare`
-- Uploads to S3 with date-based naming
-- Logs all operations
+### Command Details
 
-**Usage:**
+- **`backup:full`** – Performs a complete XtraBackup of the configured MySQL instance, prepares the backup for restore, and uploads the resulting archive to the configured S3 bucket. Logs are written to `storage/logs/full_backup.log`.
+- **`backup:binlogs`** – Archives the current MySQL binary logs, uploads them to S3, and records the operation in `storage/logs/archive_binlogs.log`. This enables point‑in‑time recovery.
+- **`backup:cleanup`** – Deletes local backups older than `RETENTION_DAYS_FOR_LOCAL` and S3 backups older than `RETENTION_DAYS_FOR_CLOUD` as defined in `.env`. This allows different retention policies for local versus cloud storage and is logged to `storage/logs/cleanup.log`.
+- **`backup:restore`** – Downloads the specified full backup from S3, applies binary logs up to the provided timestamp, and restores the data to a target directory (optional `--restore-dir`).
 
-```bash
-./full_backup.sh
-```
-
-**Output:**
-- Local backup: `$BACKUP_DIR/YYYY-MM-DD/`
-- S3 location: `s3://$S3_BUCKET/$S3_PREFIX/full/YYYY-MM-DD.tar.gz`
-
----
-
-### `archive_binlogs.sh`
-
-Archives MySQL binary logs for point-in-time recovery.
-
-**Features:**
-- Syncs binary logs to local backup directory
-- Uploads to S3 for offsite storage
-- Non-intrusive (does not flush logs)
-- Runs every 30 minutes via cron
-
-**Usage:**
-
-```bash
-./archive_binlogs.sh
-```
-
-**Output:**
-- Local: `$BINLOG_BACKUP_DIR/`
-- S3 location: `s3://$S3_BUCKET/$S3_PREFIX/binlogs/`
-
----
-
-### `cleanup.sh`
-
-Removes old backups based on retention policy.
-
-**Features:**
-- Deletes local backups older than `RETENTION_DAYS`
-- Removes corresponding S3 backups
-- Cleans both full backups and binary logs
-- Logs deletion operations
-
-**Usage:**
-
-```bash
-./cleanup.sh
-```
-
----
-
-### `restore_from_s3.sh`
-
-Restores database to a specific point in time.
-
-**Features:**
-- Downloads full backup from S3
-- Applies binary logs up to specified timestamp
-- Restores to custom directory
-- Supports point-in-time recovery (PITR)
-
-**Usage:**
-
-```bash
-./restore_from_s3.sh --date YYYY-MM-DD --time HH:MM:SS --restore-dir /path/to/restore
-```
-
-**Example:**
-
-```bash
-./restore_from_s3.sh --date 2025-11-24 --time 14:30:00 --restore-dir /restore/pitr-test
-```
-
-**Parameters:**
-- `--date`: Date of the full backup to restore (YYYY-MM-DD)
-- `--time`: Target restore timestamp (HH:MM:SS)
-- `--restore-dir`: Directory where data will be restored
+| Logs for each command are written to `storage/logs/<command>.log`.
 
 ---
 
 ## ⏰ Scheduling with Cron
 
-Edit your crontab:
-
-```bash
-crontab -e
-```
-
-Add the following entries (adjust paths as needed):
+Add the following entries to your crontab (replace `/home/khaled` with the actual path):
 
 ```cron
-# Full backup daily at 2 AM
-0 2 * * * ~/xtrabackup-man/full_backup.sh >> ~/xtrabackup-man/logs/full_backup.log 2>&1
-
-# Binlog archive every 30 minutes
-*/30 * * * * ~/xtrabackup-man/archive_binlogs.sh >> ~/xtrabackup-man/logs/archive_binlogs.log 2>&1
-
-# Cleanup daily at 3 AM
-0 3 * * * ~/xtrabackup-man/cleanup.sh >> ~/xtrabackup-man/logs/cleanup.log 2>&1
+* * * * * /usr/bin/php /home/khaled/xtrabackup-man/application schedule:run >> /home/khaled/xtrabackup-man/storage/logs/cron.log 2>&1
 ```
 
-## 🔄 Restore Procedures
-
-### Full Restore Process
-
-#### Step 1: Run the Restore Script
-
-```bash
-./restore_from_s3.sh \
-  --date 2025-11-24 \
-  --time 14:30:00 \
-  --restore-dir /restore/test-restore
-```
-
-#### Step 2: Start a Test MySQL Instance
-
-```bash
-mysqld \
-  --datadir=/restore/test-restore/data \
-  --port=3307 \
-  --socket=/tmp/mysql-restore.sock \
-  --skip-networking
-```
-
-#### Step 3: Connect and Verify
-
-```bash
-mysql -u root -S /tmp/mysql-restore.sock
-```
-
-Verify the data:
-
-```sql
-SHOW DATABASES;
-USE your_database;
-SELECT COUNT(*) FROM important_table;
--- Verify data matches expected state at restore time
-```
-
-#### Step 4: Production Restore (if verified)
-
-If the test restore looks correct:
-
-1. Stop production MySQL
-2. Backup current data directory
-3. Copy restored data to production location
-4. Start MySQL
-5. Verify application connectivity
+---
 
 ---
 
 ## 🔒 Security & Permissions
 
-### File Permissions
-
 ```bash
 # Secure the backup directory
-chmod 700 ~/db-backups
-chmod 600 ~/db-backups/.env
-
-# Make scripts executable
-chmod 700 ~/db-backups/*.sh
-
-# Set ownership
-chown -R root:root ~/db-backups
-```
-
-### MySQL User Privileges
-
-Create a dedicated backup user with minimal required privileges:
-
-```sql
-CREATE USER 'backup_user'@'localhost' IDENTIFIED BY 'secure_password';
-
-GRANT RELOAD, LOCK TABLES, REPLICATION CLIENT, PROCESS 
-ON *.* TO 'backup_user'@'localhost';
-
-GRANT SELECT ON mysql.* TO 'backup_user'@'localhost';
-
-FLUSH PRIVILEGES;
-```
-
-### AWS IAM Policy
-
-Ensure your AWS credentials have the following S3 permissions:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:ListBucket",
-        "s3:DeleteObject"
-      ],
-      "Resource": [
-        "arn:aws:s3:::your-bucket-name/*",
-        "arn:aws:s3:::your-bucket-name"
-      ]
-    }
-  ]
-}
+chmod -R 700 storage/backups
+chmod 600 .env
 ```
 
 ---
 
 ## 📊 Logging
 
-All scripts log to `$LOG_DIR` (default: `/var/log/mysql-backup/`):
-
-- `full_backup.log` - Full backup operations
-- `archive_binlogs.log` - Binary log archiving
-- `cleanup.log` - Cleanup operations
-
-### Log Rotation
-
-Configure logrotate for automatic log management:
+All commands write to `storage/logs/`. Rotate logs with `logrotate`:
 
 ```bash
 sudo nano /etc/logrotate.d/mysql-backup
 ```
-
 Add:
 
-```
-/var/log/mysql-backup/*.log {
+```text
+/storage/logs/*.log {
     daily
     rotate 30
     compress
-    delaycompress
+    missingok
     notifempty
     create 0640 root root
     sharedscripts
@@ -398,34 +199,12 @@ Add:
 
 ## ✅ Best Practices
 
-### Backup Strategy
-
-- ✅ Keep at least 2 full backups locally
-- ✅ Store backups in multiple geographic locations (S3 + another cloud/region)
-- ✅ Test restore procedures weekly on staging servers
-- ✅ Document recovery time objectives (RTO) and recovery point objectives (RPO)
-
-### Monitoring
-
-- ✅ Monitor log files daily for failures
-- ✅ Set up alerts for backup failures (email, Slack, PagerDuty)
-- ✅ Verify S3 uploads complete successfully
-- ✅ Check disk space regularly
-
-### Configuration
-
-- ✅ Set `RETENTION_DAYS` according to compliance requirements
-- ✅ Enable MySQL binary logging: `log-bin=mysql-bin` in `my.cnf`
-- ✅ Use GTID-based replication for safer point-in-time recovery
-- ✅ Keep binlog format as `ROW` for complete data capture
-
-### Security
-
-- ✅ Never commit `.env` to version control
-- ✅ Rotate backup user passwords periodically
-- ✅ Use AWS IAM roles instead of access keys when possible
-- ✅ Encrypt backups at rest (S3 encryption)
-- ✅ Implement least-privilege access
+- Keep at least two recent full backups locally.
+- Store backups in multiple geographic locations (S3 + another cloud/region).
+- Test restore procedures weekly on a staging server.
+- Monitor logs and set up alerts for failures (email, Slack, etc.).
+- Regularly rotate backup user passwords and use IAM roles when possible.
+- Enable MySQL binary logging (`log-bin=mysql-bin`) and use GTID‑based replication for safer PITR.
 
 ---
 
@@ -433,62 +212,18 @@ Add:
 
 ### Common Issues
 
-#### Backup Fails with Permission Denied
+- **Permission denied** – Verify directory permissions (`chmod 700 storage/*`).
+- **S3 upload fails** – Run `aws s3 ls s3://$S3_BUCKET` to test credentials.
+- **XtraBackup not found** – Ensure `xtrabackup` is in `$PATH` (`which xtrabackup`).
+- **Insufficient disk space** – Check with `df -h` and adjust `RETENTION_DAYS_FOR_LOCAL` to reduce local backup retention.
+- **Binary log replay fails** – Confirm binlog files exist in `storage/backups/binlogs/` and GTID consistency.
 
-```bash
-# Check file permissions
-ls -la ~/db-backups/
-chmod 700 ~/db-backups/*.sh
-```
-
-#### S3 Upload Fails
-
-```bash
-# Test AWS credentials
-aws s3 ls s3://your-bucket-name/
-
-# Check AWS CLI configuration
-aws configure list
-```
-
-#### XtraBackup Not Found
-
-```bash
-# Verify installation
-which xtrabackup
-xtrabackup --version
-
-# Add to PATH if needed
-export PATH=$PATH:/usr/bin
-```
-
-#### Insufficient Disk Space
-
-```bash
-# Check disk usage
-df -h /backups
-
-# Clean old backups manually
-./cleanup.sh
-
-# Reduce RETENTION_DAYS in .env
-```
-
-#### Binary Log Replay Fails
-
-```bash
-# Verify binlog files exist
-ls -la $BINLOG_BACKUP_DIR/
-
-# Check binlog format
-mysqlbinlog /path/to/binlog.000001 | head -20
-
-# Ensure GTID consistency
-mysql> SELECT @@GLOBAL.GTID_MODE;
-```
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please submit a Pull Request with a clear description of changes.
 
-**Khaled Mostafa.**
+---
+
+**Khaled Mostafa**
